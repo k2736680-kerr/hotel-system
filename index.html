@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'none'">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>酒店管家</title>
+  <link rel="stylesheet" href="./node_modules/element-plus/dist/index.css">
+  <link rel="stylesheet" href="./src/renderer/styles.css">
+</head>
+<body>
+  <div id="app" v-cloak>
+    <div v-if="auth.initializing" class="auth-page"><div class="auth-loading">正在打开本地数据库…</div></div>
+    <div v-else-if="!auth.authenticated" class="auth-page">
+      <div class="auth-shell">
+        <section class="auth-visual">
+          <div class="auth-visual-copy">
+            <span class="eyebrow">HOTEL STEWARD CONSOLE</span>
+            <h1>酒店管家</h1>
+            <p>本地离线运行，前台登记、房态、客户档案、报表和备份都集中在一个入口。</p>
+          </div>
+          <div class="auth-visual-points">
+            <div><strong>离线可用</strong><span>退出程序数据仍保存在本机</span></div>
+            <div><strong>自动备份</strong><span>每天滚动保留一份最新备份</span></div>
+            <div><strong>图表报表</strong><span>收入、收款和入住率一屏查看</span></div>
+          </div>
+          <svg class="hotel-illustration" viewBox="0 0 520 360" aria-hidden="true">
+            <defs>
+              <linearGradient id="hotelGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#7dd3fc" stop-opacity=".95"></stop>
+                <stop offset="100%" stop-color="#2dd4bf" stop-opacity=".85"></stop>
+              </linearGradient>
+            </defs>
+            <circle cx="404" cy="74" r="46" fill="rgba(255,255,255,.08)"></circle>
+            <path d="M64 303h392" stroke="rgba(255,255,255,.22)" stroke-width="8" stroke-linecap="round"></path>
+            <path d="M110 303V130l98-48 102 48v173" fill="rgba(4,18,31,.34)" stroke="rgba(255,255,255,.18)" stroke-width="4"></path>
+            <path d="M154 303v-70h54v70" fill="rgba(255,255,255,.12)"></path>
+            <path d="M310 303V104l100 42v157" fill="rgba(8,23,37,.38)" stroke="rgba(255,255,255,.16)" stroke-width="4"></path>
+            <path d="M92 146V92l72-34v52" fill="rgba(255,255,255,.09)"></path>
+            <rect x="138" y="136" width="28" height="30" rx="5" fill="url(#hotelGlow)"></rect>
+            <rect x="184" y="136" width="28" height="30" rx="5" fill="rgba(255,255,255,.2)"></rect>
+            <rect x="230" y="136" width="28" height="30" rx="5" fill="url(#hotelGlow)"></rect>
+            <rect x="138" y="185" width="28" height="30" rx="5" fill="rgba(255,255,255,.2)"></rect>
+            <rect x="184" y="185" width="28" height="30" rx="5" fill="url(#hotelGlow)"></rect>
+            <rect x="230" y="185" width="28" height="30" rx="5" fill="rgba(255,255,255,.2)"></rect>
+            <rect x="334" y="146" width="24" height="26" rx="4" fill="rgba(255,255,255,.18)"></rect>
+            <rect x="370" y="146" width="24" height="26" rx="4" fill="url(#hotelGlow)"></rect>
+            <rect x="334" y="188" width="24" height="26" rx="4" fill="url(#hotelGlow)"></rect>
+            <rect x="370" y="188" width="24" height="26" rx="4" fill="rgba(255,255,255,.18)"></rect>
+            <path d="M284 104h46" stroke="#d5fffb" stroke-width="8" stroke-linecap="round"></path>
+            <path d="M307 104V62" stroke="#d5fffb" stroke-width="8" stroke-linecap="round"></path>
+          </svg>
+        </section>
+        <section class="auth-panel">
+          <el-card class="auth-card">
+            <div class="auth-brand"><div class="brand-mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V8l8-5 8 5v12M8 20v-7h8v7M9 9h.01M15 9h.01"></path></svg></div><div><h2>{{ auth.needsSetup ? '初始化管理员账号' : '欢迎回来' }}</h2><p>{{ auth.needsSetup ? '首次使用先创建本机管理员' : '登录后继续上次的工作状态' }}</p></div></div>
+            <template v-if="auth.needsSetup">
+              <el-alert title="首次使用，请创建管理员账号。密码只以加盐哈希保存在本机。" type="info" :closable="false"></el-alert>
+              <el-form label-position="top" class="auth-form"><el-form-item label="登录账号" required><el-input v-model="registerForm.username" maxlength="30" placeholder="3-30位字母、数字或下划线"></el-input></el-form-item><el-form-item label="显示名称" required><el-input v-model="registerForm.displayName" maxlength="30" placeholder="例如：前台管理员"></el-input></el-form-item><el-form-item label="登录密码" required><el-input v-model="registerForm.password" type="password" show-password placeholder="至少8位，必须包含字母和数字" @keyup.enter="submitRegister"></el-input></el-form-item><el-form-item label="确认密码" required><el-input v-model="registerForm.confirmPassword" type="password" show-password @keyup.enter="submitRegister"></el-input></el-form-item><el-button type="primary" size="large" class="auth-submit" :loading="saving" @click="submitRegister">创建管理员并进入系统</el-button></el-form>
+            </template>
+            <template v-else>
+              <h3 class="login-title">账号登录</h3>
+              <el-form label-position="top" class="auth-form"><el-form-item label="账号"><el-input v-model="loginForm.username" autofocus @keyup.enter="submitLogin"></el-input></el-form-item><el-form-item label="密码"><el-input v-model="loginForm.password" type="password" show-password @keyup.enter="submitLogin"></el-input></el-form-item><el-button type="primary" size="large" class="auth-submit" :loading="saving" @click="submitLogin">登录</el-button></el-form>
+            </template>
+          </el-card>
+        </section>
+      </div>
+    </div>
+    <el-container v-else class="app-shell">
+      <el-aside width="232px" class="sidebar">
+        <div class="brand">
+          <div class="brand-mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V8l8-5 8 5v12M8 20v-7h8v7M9 9h.01M15 9h.01"></path></svg></div>
+          <div><strong>{{ settings.hotelName || '酒店管家' }}</strong><small>HOTEL OPERATIONS</small></div>
+        </div>
+        <el-menu :default-active="activePage" @select="changePage" class="side-menu">
+          <el-menu-item index="dashboard"><span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect></svg></span>房态总览</el-menu-item>
+          <el-menu-item index="rooms"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 21V4h16v17M8 8h2M14 8h2M8 12h2M14 12h2M9 21v-5h6v5"></path></svg></span>房间与房型</el-menu-item>
+          <el-menu-item index="guests"><span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c.8-4.5 3.5-7 8-7s7.2 2.5 8 7"></path></svg></span>客户档案</el-menu-item>
+          <el-menu-item index="stays"><span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M8 3v4M16 3v4M3 10h18M8 14h3M8 17h6"></path></svg></span>预订与入住</el-menu-item>
+          <el-menu-item index="reports"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"></path></svg></span>经营报表</el-menu-item>
+          <el-menu-item index="logs"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"></path></svg></span>操作日志</el-menu-item>
+          <el-menu-item index="settings"><span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19 12a7 7 0 0 0-.1-1l2-1.5-2-3.4-2.4 1A7 7 0 0 0 14.8 6L14.5 3h-5L9.2 6a7 7 0 0 0-1.7 1.1l-2.4-1-2 3.4 2 1.5a7 7 0 0 0 0 2l-2 1.5 2 3.4 2.4-1A7 7 0 0 0 9.2 18l.3 3h5l.3-3a7 7 0 0 0 1.7-1.1l2.4 1 2-3.4-2-1.5c.1-.3.1-.7.1-1Z"></path></svg></span>系统与备份</el-menu-item>
+        </el-menu>
+        <div class="sidebar-foot">数据保存在本机<br>退出程序不会丢失<br><small class="version-tag">v{{ appVersion }}</small></div>
+      </el-aside>
+
+      <el-container>
+        <el-header class="topbar">
+          <div class="topbar-title"><span>{{ settings.hotelName || '我的酒店' }}</span><h1>{{ pageTitle }}</h1><p>{{ todayText }}</p></div>
+          <div class="topbar-actions">
+            <el-button @click="refreshCurrent" :loading="loading">刷新数据</el-button>
+            <el-button type="primary" @click="openGuest()">登记客户</el-button>
+            <el-dropdown trigger="click" @command="handleUserCommand">
+              <div class="current-user user-menu"><span class="user-avatar">{{ userInitial }}</span><span><small>当前账号</small><strong>{{ auth.user?.displayName }}</strong></span><span class="user-caret"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"></path></svg></span></div>
+              <template #dropdown><el-dropdown-menu><el-dropdown-item command="profile">修改名称</el-dropdown-item><el-dropdown-item command="password">修改密码</el-dropdown-item><el-dropdown-item command="logout" divided>退出登录</el-dropdown-item></el-dropdown-menu></template>
+            </el-dropdown>
+          </div>
+        </el-header>
+
+        <el-main class="main-content" v-loading="loading">
+          <template v-if="activePage === 'dashboard'">
+            <div class="page-shell dashboard-page">
+              <div class="page-fixed dashboard-fixed">
+                <div class="metric-grid">
+                  <div v-for="item in metrics" :key="item.label" class="metric-card" :class="item.className">
+                    <span>{{ item.label }}</span><strong>{{ item.value }}</strong><small>{{ item.hint }}</small>
+                  </div>
+                </div>
+                <div class="section-heading"><div><h2>实时房态</h2><p>房态由入住和清洁业务自动计算，不能直接篡改</p></div><div class="header-tools"><el-input v-model="roomKeyword" clearable placeholder="搜索房号、房型、楼层" style="width:210px"></el-input><el-select v-model="roomStatusFilter" clearable placeholder="全部房态" style="width:130px"><el-option label="空闲" value="VACANT"></el-option><el-option label="今日预抵" value="RESERVED"></el-option><el-option label="入住中" value="OCCUPIED"></el-option><el-option label="待清洁" value="DIRTY"></el-option><el-option label="维修中" value="MAINTENANCE"></el-option><el-option label="已停用" value="DISABLED"></el-option></el-select></div></div>
+              </div>
+              <div class="page-scroll dashboard-scroll">
+                <div v-if="!rooms.length" class="empty-panel">
+                  <h3>还没有房间</h3><p>请先创建房型和房间，再办理入住。</p>
+                  <el-button type="primary" @click="changePage('rooms')">配置房间</el-button>
+                </div>
+                <div v-else-if="!filteredRooms.length" class="empty-panel"><h3>没有匹配的房间</h3><p>请调整房号、房型、楼层或房态筛选条件。</p></div>
+                <div v-else class="room-grid">
+                  <article v-for="room in filteredRooms" :key="room.id" class="room-card" :class="`status-${room.display_status.toLowerCase()}`">
+                    <div class="room-card-head"><strong>{{ room.room_no }}</strong><el-tag :type="statusType(room.display_status)">{{ statusText(room.display_status) }}</el-tag></div>
+                    <p>{{ room.room_type_name }} · {{ room.floor || '未设置楼层' }}</p>
+                    <div class="room-price">¥{{ money(room.standard_price_cents) }}<small>/夜</small></div>
+                    <div v-if="room.current_guest_name" class="occupant">住客：{{ room.current_guest_name }}</div>
+                    <div v-if="room.reservation_guest_name" class="occupant">今日预抵：{{ room.reservation_guest_name }}</div>
+                    <div class="room-actions">
+                      <el-button v-if="room.display_status === 'VACANT'" type="primary" size="small" @click="openCheckIn(room)">办理入住</el-button>
+                      <el-button v-if="room.display_status === 'OCCUPIED'" size="small" @click="openStayByOrder(room.current_order_id)">查看在住</el-button>
+                      <el-button v-if="room.display_status === 'RESERVED'" type="warning" size="small" @click="openStayByOrder(room.current_reservation_id)">查看预订</el-button>
+                      <el-button v-if="room.display_status === 'DIRTY'" type="success" size="small" @click="markClean(room)">确认已清洁</el-button>
+                      <el-button v-if="room.display_status === 'MAINTENANCE'" size="small" @click="endMaintenance(room)">结束维修</el-button>
+                    </div>
+                  </article>
+                </div>
+              </div>
+            </div>
+          </template>
+
+          <template v-if="activePage === 'rooms'">
+            <div class="page-shell rooms-page">
+              <el-card class="content-card room-types-card">
+                <template #header><div class="card-header"><div><strong>房型设置</strong><small>标准价只影响新订单</small></div><el-button type="primary" @click="openRoomType()">新增房型</el-button></div></template>
+                <div class="table-scroll-wrap compact-scroll-wrap">
+                  <el-table :data="roomTypes" border>
+                    <el-table-column prop="name" label="房型" min-width="140"></el-table-column>
+                    <el-table-column label="标准价" width="130"><template #default="scope">¥{{ money(scope.row.standard_price_cents) }}</template></el-table-column>
+                    <el-table-column prop="default_capacity" label="默认人数" width="110" align="center"></el-table-column>
+                    <el-table-column prop="max_capacity" label="最大人数" width="110" align="center"></el-table-column>
+                    <el-table-column prop="description" label="说明" min-width="180" show-overflow-tooltip></el-table-column>
+                    <el-table-column label="状态" width="90" align="center"><template #default="scope"><el-tag :type="scope.row.enabled ? 'success' : 'info'">{{ scope.row.enabled ? '启用' : '停用' }}</el-tag></template></el-table-column>
+                    <el-table-column label="操作" width="170" fixed="right"><template #default="scope"><el-button link type="primary" @click="openRoomType(scope.row)">编辑</el-button><el-button link :type="scope.row.enabled ? 'danger' : 'success'" @click="toggleRoomType(scope.row)">{{ scope.row.enabled ? '停用' : '启用' }}</el-button></template></el-table-column>
+                  </el-table>
+                </div>
+              </el-card>
+
+              <el-card class="content-card table-page-card room-list-card">
+                <template #header><div class="card-header"><div><strong>房间管理</strong><small>退房后必须确认清洁才可再次入住</small></div><el-button type="primary" @click="openRoom()">新增房间</el-button></div></template>
+                <div class="filter-row room-filter-row"><el-input v-model="roomKeyword" clearable placeholder="搜索房号、房型或楼层"></el-input><el-select v-model="roomStatusFilter" clearable placeholder="全部房态" style="width:150px"><el-option label="空闲" value="VACANT"></el-option><el-option label="今日预抵" value="RESERVED"></el-option><el-option label="入住中" value="OCCUPIED"></el-option><el-option label="待清洁" value="DIRTY"></el-option><el-option label="维修中" value="MAINTENANCE"></el-option><el-option label="已停用" value="DISABLED"></el-option></el-select></div>
+                <div class="table-scroll-wrap">
+                  <el-table :data="filteredRooms" border>
+                    <el-table-column prop="room_no" label="房号" width="110"></el-table-column>
+                    <el-table-column prop="room_type_name" label="房型" min-width="130"></el-table-column>
+                    <el-table-column prop="floor" label="楼层" width="100"></el-table-column>
+                    <el-table-column label="标准价" width="120"><template #default="scope">¥{{ money(scope.row.standard_price_cents) }}</template></el-table-column>
+                    <el-table-column label="房态" width="110" align="center"><template #default="scope"><el-tag :type="statusType(scope.row.display_status)">{{ statusText(scope.row.display_status) }}</el-tag></template></el-table-column>
+                    <el-table-column prop="notes" label="备注" min-width="160" show-overflow-tooltip></el-table-column>
+                    <el-table-column label="操作" width="300" fixed="right"><template #default="scope">
+                      <el-button link type="primary" @click="openRoom(scope.row)">编辑</el-button>
+                      <el-button v-if="scope.row.display_status === 'DIRTY'" link type="success" @click="markClean(scope.row)">已清洁</el-button>
+                      <el-button v-if="scope.row.maintenance_status === 'NORMAL' && scope.row.display_status !== 'OCCUPIED'" link type="warning" @click="startMaintenance(scope.row)">报修</el-button>
+                      <el-button v-if="scope.row.maintenance_status === 'MAINTENANCE'" link type="success" @click="endMaintenance(scope.row)">结束维修</el-button>
+                      <el-button link :type="scope.row.enabled ? 'danger' : 'success'" @click="toggleRoom(scope.row)">{{ scope.row.enabled ? '停用' : '启用' }}</el-button>
+                    </template></el-table-column>
+                  </el-table>
+                </div>
+              </el-card>
+            </div>
+          </template>
+
+          <template v-if="activePage === 'guests'">
+            <div class="page-shell">
+              <el-card class="content-card table-page-card">
+                <template #header><div class="card-header"><div><strong>客户档案</strong><small>客户表格独立导入导出，完整业务数据仍使用数据库备份</small></div><div class="header-tools"><el-button @click="importGuests">导入 CSV</el-button><el-button @click="exportGuests">导出 CSV</el-button><el-button type="primary" @click="openGuest()">新增客户</el-button></div></div></template>
+                <div class="filter-row"><el-input v-model="guestKeyword" clearable placeholder="搜索姓名、手机号或证件号" @keyup.enter="loadGuests"></el-input><el-button @click="loadGuests">查询</el-button></div>
+                <div class="table-scroll-wrap">
+                  <el-table :data="guests" border>
+                    <el-table-column prop="name" label="姓名" width="120"></el-table-column>
+                    <el-table-column label="证件类型" width="120"><template #default="scope">{{ documentText(scope.row.document_type) }}</template></el-table-column>
+                    <el-table-column label="证件号码" min-width="190"><template #default="scope">{{ maskDocument(scope.row.document_no) }}</template></el-table-column>
+                    <el-table-column prop="phone" label="手机号" width="150"></el-table-column>
+                    <el-table-column prop="address" label="地址" min-width="180" show-overflow-tooltip></el-table-column>
+                    <el-table-column label="状态" width="100"><template #default="scope"><el-tag :type="scope.row.blacklisted ? 'danger' : 'success'">{{ scope.row.blacklisted ? '黑名单' : '正常' }}</el-tag></template></el-table-column>
+                    <el-table-column label="操作" width="100" fixed="right"><template #default="scope"><el-button link type="primary" @click="openGuest(scope.row)">编辑</el-button></template></el-table-column>
+                  </el-table>
+                </div>
+              </el-card>
+            </div>
+          </template>
+
+          <template v-if="activePage === 'stays'">
+            <div class="page-shell">
+              <el-card class="content-card table-page-card">
+                <template #header><div class="card-header"><div><strong>预订、入住与账单</strong><small>订单全流程和资金流水统一管理</small></div><div class="header-tools"><el-input v-model="stayKeyword" clearable placeholder="订单号/客户/电话/房号" style="width:210px" @keyup.enter="loadStays"></el-input><el-select v-model="stayStatus" style="width:130px" @change="loadStays"><el-option label="全部订单" value=""></el-option><el-option label="已预订" value="RESERVED"></el-option><el-option label="当前在住" value="CHECKED_IN"></el-option><el-option label="已退房" value="CHECKED_OUT"></el-option><el-option label="已取消" value="CANCELLED"></el-option></el-select><el-button @click="loadStays">查询</el-button><el-button type="primary" @click="openReservation">新建预订</el-button></div></div></template>
+                <div class="table-scroll-wrap">
+                  <el-table :data="stays" border>
+                    <el-table-column prop="order_no" label="订单号" min-width="190"></el-table-column>
+                    <el-table-column prop="room_no" label="房号" width="90"></el-table-column>
+                    <el-table-column prop="contact_name" label="客户" width="110"></el-table-column>
+                    <el-table-column label="入住时间" min-width="165"><template #default="scope">{{ dateTime(scope.row.actual_checkin) }}</template></el-table-column>
+                    <el-table-column label="预计离店" min-width="165"><template #default="scope">{{ dateTime(scope.row.expected_checkout) }}</template></el-table-column>
+                    <el-table-column label="账单金额" width="120"><template #default="scope">¥{{ money(scope.row.charge_total_cents) }}</template></el-table-column>
+                    <el-table-column label="余额" width="120"><template #default="scope"><span :class="scope.row.charge_total_cents - scope.row.net_paid_cents > 0 ? 'money-due' : ''">¥{{ money(scope.row.charge_total_cents - scope.row.net_paid_cents) }}</span></template></el-table-column>
+                    <el-table-column label="状态" width="100"><template #default="scope"><el-tag :type="scope.row.status === 'CHECKED_IN' ? 'warning' : scope.row.status === 'RESERVED' ? 'primary' : 'info'">{{ orderStatusText(scope.row.status) }}</el-tag></template></el-table-column>
+                    <el-table-column label="操作" width="190" fixed="right"><template #default="scope"><el-button link type="primary" @click="openStay(scope.row)">查看详情</el-button><el-button v-if="scope.row.status === 'RESERVED'" link type="success" @click="checkInReservation(scope.row)">办理入住</el-button></template></el-table-column>
+                  </el-table>
+                </div>
+              </el-card>
+            </div>
+          </template>
+
+          <template v-if="activePage === 'reports'">
+            <section class="report-page">
+              <div class="report-sticky-header">
+                <div class="report-toolbar">
+                  <div><span class="eyebrow">OPERATION REPORT</span><h2>经营数据概览</h2><p>费用按业务日期统计，收款和退款按实际操作日期统计</p></div>
+                  <div class="report-actions">
+                    <el-select v-model="reportTimeRange" style="width:140px" @change="loadReport">
+                      <el-option label="本周" value="last_week"></el-option>
+                      <el-option label="本月" value="current_month"></el-option>
+                      <el-option label="上月" value="last_month"></el-option>
+                      <el-option label="选择月份" value="selected_month"></el-option>
+                      <el-option label="自定义" value="custom"></el-option>
+                    </el-select>
+                    <el-date-picker v-if="reportTimeRange === 'selected_month'" v-model="reportMonth" type="month" placeholder="选择月份" format="YYYY-MM" @change="loadReport"></el-date-picker>
+                    <el-date-picker v-if="reportTimeRange === 'custom'" v-model="reportDates" type="daterange" range-separator="至" start-placeholder="开始日期" end-placeholder="结束日期" format="YYYY-MM-DD"></el-date-picker>
+                    <el-button type="primary" @click="loadReport">更新报表</el-button>
+                    <el-button class="export-button" @click="exportReport">导出 CSV</el-button>
+                  </div>
+                </div>
+                <div class="report-summary-grid">
+                  <div class="report-summary-item revenue"><span>费用收入</span><strong>¥{{ money(reportOverview.totalRevenueCents) }}</strong><small>{{ reportOverview.days }} 个经营日</small></div>
+                  <div class="report-summary-item receipts"><span>净收款</span><strong>¥{{ money(reportOverview.netReceiptsCents) }}</strong><small>收款减去退款</small></div>
+                  <div class="report-summary-item occupancy"><span>平均入住率</span><strong>{{ reportOverview.occupancyRate }}%</strong><small>按可售间夜加权</small></div>
+                  <div class="report-summary-item arrivals"><span>累计入住</span><strong>{{ reportOverview.checkins }}</strong><small>办理入住订单数</small></div>
+                </div>
+              </div>
+              <div class="report-content-wrap">
+                <div v-if="reportRows.length" class="report-chart-section">
+                <el-card class="content-card chart-card report-line-card">
+                  <template #header>
+                    <div class="card-header">
+                      <div><strong>收入与净收款趋势</strong><small>用于看出每日营业额和真实回款的变化</small></div>
+                      <el-tag effect="plain" type="success">共 {{ reportRows.length }} 天</el-tag>
+                    </div>
+                  </template>
+                  <div class="chart-legend"><span class="legend-item"><i class="legend-swatch revenue"></i>费用收入</span><span class="legend-item"><i class="legend-swatch receipts"></i>净收款</span></div>
+                  <div class="line-chart-shell">
+                    <svg viewBox="0 -70 980 370" class="line-chart" aria-label="经营收入趋势图">
+                      <defs>
+                        <filter id="tooltipShadow" x="-20%" y="-20%" width="140%" height="140%">
+                          <feDropShadow dx="1" dy="1" stdDeviation="2" flood-color="#000" flood-opacity="0.15"></feDropShadow>
+                        </filter>
+                      </defs>
+                      <g>
+                        <line v-for="tick in reportChart.yTicks" :key="`grid-${tick.index}`" x1="68" :y1="tick.y" x2="948" :y2="tick.y" class="chart-grid-line"></line>
+                        <text v-for="tick in reportChart.yTicks" :key="`label-${tick.index}`" x="8" :y="tick.y + 4" class="chart-y-label">{{ tick.label }}</text>
+                        <line x1="68" :y1="reportChart.zeroY" x2="948" :y2="reportChart.zeroY" class="chart-zero-line"></line>
+                        <path :d="reportChart.revenuePath" class="chart-line revenue"></path>
+                        <path :d="reportChart.receiptsPath" class="chart-line receipts"></path>
+                        <g v-for="point in reportChart.revenueDots" :key="`revenue-${point.index}`" @mouseenter="showChartTooltip(point, '费用收入')" @mouseleave="hideChartTooltip">
+                          <circle :cx="point.x" :cy="point.y" r="5" class="chart-dot revenue"></circle>
+                          <circle :cx="point.x" :cy="point.y" r="10" class="chart-dot-hit"></circle>
+                        </g>
+                        <g v-for="point in reportChart.receiptDots" :key="`receipts-${point.index}`" @mouseenter="showChartTooltip(point, '净收款')" @mouseleave="hideChartTooltip">
+                          <circle :cx="point.x" :cy="point.y" r="5" class="chart-dot receipts"></circle>
+                          <circle :cx="point.x" :cy="point.y" r="10" class="chart-dot-hit"></circle>
+                        </g>
+                        <text v-for="label in reportChart.xLabels" :key="`x-${label.index}`" :x="label.x" y="286" class="chart-x-label">{{ label.label }}</text>
+                        <g v-if="chartTooltip">
+                          <line :x1="chartTooltip.x" :y1="chartTooltip.y" :x2="chartTooltip.x" y2="270" class="chart-crosshair"></line>
+                          <g :transform="`translate(${chartTooltip.x + (chartTooltip.x > 860 ? -145 : 15)}, ${chartTooltip.y - 20})`" filter="url(#tooltipShadow)" style="pointer-events: none;">
+                            <rect x="0" y="0" width="130" height="46" rx="6" ry="6" class="chart-tooltip-bg"></rect>
+                            <text x="12" y="18" class="chart-tooltip-date">{{ chartTooltip.date }}</text>
+                            <text x="12" y="40" class="chart-tooltip-value" :class="chartTooltip.type">{{ chartTooltip.value }}</text>
+                          </g>
+                        </g>
+                      </g>
+                    </svg>
+                  </div>
+                </el-card>
+                <el-card class="content-card chart-card report-bar-card">
+                  <template #header>
+                    <div class="card-header">
+                      <div><strong>入住率柱状图</strong><small>按日查看可售房和实际已售间夜</small></div>
+                      <el-tag effect="plain" type="warning">平均 {{ reportOverview.occupancyRate }}%</el-tag>
+                    </div>
+                  </template>
+                  <div class="occupancy-chart">
+                    <div class="occupancy-axis"><span v-for="tick in reportChart.occupancyTicks" :key="`occ-${tick}`" :style="{ bottom: `${tick}%` }">{{ tick }}%</span></div>
+                    <div class="occupancy-bars" :style="{ gridTemplateColumns: `repeat(${reportChart.occupancyBars.length}, minmax(0, 1fr))` }">
+                      <div v-for="bar in reportChart.occupancyBars" :key="bar.index" class="occupancy-bar" :title="`${bar.date}｜入住率 ${bar.rate.toFixed(1)}%｜已售 ${bar.occupiedRooms}/${bar.totalRooms}`">
+                        <div class="occupancy-bar-top">{{ bar.showCount ? `${bar.occupiedRooms}/${bar.totalRooms}` : '' }}</div>
+                        <div class="occupancy-track"><span class="occupancy-fill" :style="{ height: `${bar.fillHeight}%` }"></span></div>
+                        <small v-if="bar.showLabel">{{ bar.label }}</small>
+                      </div>
+                    </div>
+                  </div>
+                </el-card>
+              </div>
+              <div v-else class="report-empty"><span>暂无经营数据</span><p>调整日期范围后点击"更新报表"</p></div>
+              </div>
+            </section>
+          </template>
+
+          <template v-if="activePage === 'logs'">
+            <div class="page-shell">
+              <el-card class="content-card table-page-card"><template #header><div class="card-header"><div><strong>操作日志</strong><small>日志持久保存在本地数据库，按操作日期查询和分页</small></div><el-button @click="resetLogFilters">重置筛选</el-button></div></template>
+                <div class="log-filters"><el-date-picker v-model="logDateRange" type="daterange" range-separator="至" start-placeholder="开始日期" end-placeholder="结束日期" format="YYYY-MM-DD"></el-date-picker><el-select v-model="logQuery.action" clearable placeholder="全部动作" style="width:180px"><el-option v-for="action in logs.actions" :key="action" :label="actionText(action)" :value="action"></el-option></el-select><el-input v-model="logQuery.keyword" clearable placeholder="内容、操作人、对象" style="width:240px" @keyup.enter="searchLogs"></el-input><el-button type="primary" @click="searchLogs">查询</el-button></div>
+                <div class="table-scroll-wrap">
+                  <el-table :data="logs.items" border><el-table-column prop="log_date" label="日期" width="115"></el-table-column><el-table-column label="时间" width="105"><template #default="scope">{{ timeOnly(scope.row.created_at) }}</template></el-table-column><el-table-column prop="operator_name" label="操作人" width="120"></el-table-column><el-table-column label="动作" width="150"><template #default="scope">{{ actionText(scope.row.action) }}</template></el-table-column><el-table-column prop="summary" label="内容" min-width="300"></el-table-column></el-table>
+                </div>
+                <div class="pagination-row"><span>共 {{ logs.total }} 条日志</span><el-pagination v-model:current-page="logQuery.page" v-model:page-size="logQuery.pageSize" :page-sizes="[10,20,50,100]" layout="sizes, prev, pager, next" :total="logs.total" @current-change="loadLogs" @size-change="handleLogPageSize"></el-pagination></div>
+              </el-card>
+            </div>
+          </template>
+
+          <template v-if="activePage === 'settings'">
+            <div class="page-shell">
+              <div class="page-scroll">
+                <div class="settings-grid">
+                  <el-card class="content-card"><template #header><div class="card-header"><div><strong>酒店与业务设置</strong><small>作为新预订和入住的默认值</small></div></div></template><el-form label-width="110px"><el-form-item label="酒店名称" required><el-input v-model="settingsForm.hotelName"></el-input></el-form-item><el-form-item label="联系电话"><el-input v-model="settingsForm.phone"></el-input></el-form-item><el-form-item label="酒店地址"><el-input v-model="settingsForm.address"></el-input></el-form-item><el-form-item label="默认押金"><el-input-number v-model="settingsForm.defaultDeposit" :min="0" :precision="2"></el-input-number><span class="form-unit">元</span></el-form-item><el-form-item label="默认入住时间"><el-input-number v-model="settingsForm.defaultCheckinHour" :min="0" :max="23"></el-input-number><span class="form-unit">时</span></el-form-item><el-form-item label="默认退房时间"><el-input-number v-model="settingsForm.defaultCheckoutHour" :min="0" :max="23"></el-input-number><span class="form-unit">时</span></el-form-item><el-form-item><el-button type="primary" :loading="saving" @click="saveSettings">保存设置</el-button><el-button @click="openPasswordDialog">修改登录密码</el-button></el-form-item></el-form></el-card>
+                  <el-card class="content-card"><template #header><div class="card-header"><div><strong>数据安全</strong><small>建议每天将备份复制到其他磁盘</small></div></div></template>
+                    <div class="setting-action"><div><h3>每日自动备份</h3><p>每天检查并在正常退出时更新 `auto-latest.sqlite`，始终只保留一份滚动备份。</p></div><el-tag type="success" size="large">已启用</el-tag></div>
+                    <el-divider></el-divider>
+                    <div class="setting-action"><div><h3>手动备份</h3><p>生成完整 SQLite 备份，可用于故障恢复。</p></div><el-button type="primary" @click="createBackup">选择位置并备份</el-button></div>
+                    <el-divider></el-divider>
+                    <div class="setting-action"><div><h3>恢复备份</h3><p>恢复前系统会自动保存当前数据库的安全副本。</p></div><el-button type="danger" plain @click="restoreBackup">选择备份并恢复</el-button></div>
+                  </el-card>
+                </div>
+              </div>
+            </div>
+          </template>
+        </el-main>
+      </el-container>
+    </el-container>
+
+    <el-dialog v-model="roomTypeDialog" :title="roomTypeForm.id ? '编辑房型' : '新增房型'" width="520px" destroy-on-close>
+      <el-form label-width="110px"><el-form-item label="房型名称" required><el-input v-model="roomTypeForm.name" maxlength="30"></el-input></el-form-item><el-form-item label="标准房价" required><el-input-number v-model="roomTypeForm.standardPrice" :min="0" :precision="2" :step="10"></el-input-number><span class="form-unit">元/夜</span></el-form-item><el-form-item label="默认人数"><el-input-number v-model="roomTypeForm.defaultCapacity" :min="1" :max="20"></el-input-number></el-form-item><el-form-item label="最大人数"><el-input-number v-model="roomTypeForm.maxCapacity" :min="1" :max="20"></el-input-number></el-form-item><el-form-item label="说明"><el-input v-model="roomTypeForm.description" type="textarea" :rows="2" maxlength="100"></el-input></el-form-item></el-form>
+      <template #footer><el-button @click="roomTypeDialog=false">取消</el-button><el-button type="primary" :loading="saving" @click="saveRoomType">保存</el-button></template>
+    </el-dialog>
+
+    <el-dialog v-model="roomDialog" :title="roomForm.id ? '编辑房间' : '新增房间'" width="520px" destroy-on-close>
+      <el-form label-width="100px"><el-form-item label="房号" required><el-input v-model="roomForm.roomNo" maxlength="20"></el-input></el-form-item><el-form-item label="房型" required><el-select v-model="roomForm.roomTypeId" style="width:100%"><el-option v-for="item in enabledRoomTypes" :key="item.id" :label="item.name" :value="item.id"></el-option></el-select></el-form-item><el-form-item label="楼层"><el-input v-model="roomForm.floor" maxlength="20"></el-input></el-form-item><el-form-item label="备注"><el-input v-model="roomForm.notes" type="textarea" :rows="2" maxlength="100"></el-input></el-form-item></el-form>
+      <template #footer><el-button @click="roomDialog=false">取消</el-button><el-button type="primary" :loading="saving" @click="saveRoom">保存</el-button></template>
+    </el-dialog>
+
+    <el-dialog v-model="guestDialog" :title="guestForm.id ? '编辑客户' : '登记客户'" width="620px" destroy-on-close>
+      <el-form label-width="100px"><el-row :gutter="16"><el-col :span="12"><el-form-item label="姓名" required><el-input v-model="guestForm.name"></el-input></el-form-item></el-col><el-col :span="12"><el-form-item label="证件类型"><el-select v-model="guestForm.documentType" style="width:100%"><el-option label="居民身份证" value="ID_CARD"></el-option><el-option label="护照" value="PASSPORT"></el-option><el-option label="其他证件" value="OTHER"></el-option></el-select></el-form-item></el-col><el-col :span="24"><el-form-item label="证件号码" required><el-input v-model="guestForm.documentNo" maxlength="40"></el-input></el-form-item></el-col><el-col :span="12"><el-form-item label="手机号"><el-input v-model="guestForm.phone" maxlength="30"></el-input></el-form-item></el-col><el-col :span="12"><el-form-item label="黑名单"><el-switch v-model="guestForm.blacklisted"></el-switch></el-form-item></el-col><el-col :span="24"><el-form-item label="地址"><el-input v-model="guestForm.address"></el-input></el-form-item></el-col><el-col :span="24" v-if="guestForm.blacklisted"><el-form-item label="黑名单原因" required><el-input v-model="guestForm.blacklistReason"></el-input></el-form-item></el-col><el-col :span="24"><el-form-item label="备注"><el-input v-model="guestForm.notes" type="textarea" :rows="2"></el-input></el-form-item></el-col></el-row></el-form>
+      <template #footer><el-button @click="guestDialog=false">取消</el-button><el-button type="primary" :loading="saving" @click="saveGuest">保存</el-button></template>
+    </el-dialog>
+
+    <el-dialog v-model="checkInDialog" title="办理直接入住" width="620px" destroy-on-close>
+      <el-alert title="入住提交后会同时创建订单、房费和押金流水" type="info" :closable="false" show-icon></el-alert>
+      <el-form label-width="120px" class="dialog-form"><el-form-item label="房间"><el-input :model-value="checkInRoomLabel" disabled></el-input></el-form-item><el-form-item label="主住客户" required><el-select v-model="checkInForm.guestId" filterable style="width:100%" placeholder="请选择已登记客户"><el-option v-for="item in guests" :key="item.id" :label="`${item.name} · ${maskDocument(item.document_no)}`" :value="item.id" :disabled="!!item.blacklisted"></el-option></el-select></el-form-item><el-form-item label="入住时间" required><el-date-picker v-model="checkInForm.actualCheckin" type="datetime" style="width:100%" format="YYYY-MM-DD HH:mm"></el-date-picker></el-form-item><el-form-item label="预计离店" required><el-date-picker v-model="checkInForm.expectedCheckout" type="datetime" style="width:100%" format="YYYY-MM-DD HH:mm"></el-date-picker></el-form-item><el-form-item label="成交房价" required><el-input-number v-model="checkInForm.nightlyRate" :min="0" :precision="2"></el-input-number><span class="form-unit">元/夜</span></el-form-item><el-form-item label="入住押金"><el-input-number v-model="checkInForm.deposit" :min="0" :precision="2"></el-input-number><span class="form-unit">元</span></el-form-item><el-form-item label="支付方式" v-if="checkInForm.deposit > 0"><el-select v-model="checkInForm.paymentMethod" style="width:100%"><el-option v-for="item in paymentMethods" :key="item.value" :label="item.label" :value="item.value"></el-option></el-select></el-form-item><el-form-item label="备注"><el-input v-model="checkInForm.notes" type="textarea" :rows="2"></el-input></el-form-item></el-form>
+      <template #footer><el-button @click="checkInDialog=false">取消</el-button><el-button type="primary" :loading="saving" @click="submitCheckIn">确认入住</el-button></template>
+    </el-dialog>
+
+    <el-drawer v-model="stayDrawer" title="订单账单" size="680px" destroy-on-close>
+      <template v-if="selectedStay && selectedBill"><div class="stay-summary"><div><span>订单号</span><strong>{{ selectedStay.order_no }}</strong></div><div><span>房间 / 客户</span><strong>{{ selectedStay.room_no }} · {{ selectedStay.contact_name }}</strong></div><div><span>状态</span><el-tag :type="selectedStay.status === 'CHECKED_IN' ? 'warning' : 'info'">{{ orderStatusText(selectedStay.status) }}</el-tag></div></div>
+        <div class="bill-metrics"><div><span>费用合计</span><strong>¥{{ money(selectedBill.chargeTotalCents) }}</strong></div><div><span>净收款</span><strong>¥{{ money(selectedBill.netPaidCents) }}</strong></div><div><span>账单余额</span><strong :class="selectedBill.balanceCents > 0 ? 'money-due' : ''">¥{{ money(selectedBill.balanceCents) }}</strong></div></div>
+        <div class="drawer-actions" v-if="selectedStay.status === 'CHECKED_IN'"><el-button type="primary" @click="openCollect">收款</el-button><el-button @click="openCharge">添加费用/优惠</el-button><el-button @click="openExtend">续住</el-button><el-button @click="openChangeRoom">换房</el-button><el-button @click="openAddGuest">添加同住人</el-button><el-button type="danger" @click="openCheckout">办理退房</el-button></div>
+        <div class="drawer-actions" v-if="selectedStay.status === 'RESERVED'"><el-button type="success" @click="checkInReservation(selectedStay)">办理入住</el-button><el-button type="primary" @click="openCollect">补收定金</el-button><el-button type="danger" plain @click="cancelReservation(selectedStay)">取消预订</el-button></div>
+        <h3 class="drawer-title">入住人员</h3><div class="guest-chip-list"><el-tag v-for="guest in selectedBill.guests" :key="guest.id" size="large" :closable="selectedStay.status === 'CHECKED_IN' && !guest.is_primary" @close="removeStayGuest(guest)">{{ guest.name }}{{ guest.is_primary ? '（主住）' : '' }}</el-tag></div>
+        <h3 class="drawer-title" v-if="selectedBill.segments.length > 1">房间轨迹</h3><el-table v-if="selectedBill.segments.length > 1" :data="selectedBill.segments" size="small" border><el-table-column prop="room_no" label="房号" width="90"></el-table-column><el-table-column label="入住时间" min-width="150"><template #default="scope">{{ dateTime(scope.row.actual_checkin || scope.row.expected_checkin) }}</template></el-table-column><el-table-column label="离店/换房" min-width="150"><template #default="scope">{{ dateTime(scope.row.actual_checkout || scope.row.expected_checkout) }}</template></el-table-column><el-table-column label="成交价" width="100"><template #default="scope">¥{{ money(scope.row.nightly_rate_cents) }}</template></el-table-column></el-table>
+        <h3 class="drawer-title">费用明细</h3><el-table :data="billChargeRows" size="small" border><el-table-column prop="description" label="项目" min-width="180"></el-table-column><el-table-column label="类型" width="90"><template #default="scope">{{ chargeTypeText(scope.row.type) }}</template></el-table-column><el-table-column label="金额" width="110" align="right"><template #default="scope">¥{{ money(scope.row.amount_cents) }}</template></el-table-column><el-table-column label="操作" width="80"><template #default="scope"><el-button v-if="selectedStay.status === 'CHECKED_IN' && typeof scope.row.id === 'number'" link type="danger" @click="voidCharge(scope.row)">作废</el-button></template></el-table-column></el-table>
+        <h3 class="drawer-title">收退款流水</h3><el-table :data="selectedBill.payments" size="small" border><el-table-column label="时间" min-width="145"><template #default="scope">{{ dateTime(scope.row.created_at) }}</template></el-table-column><el-table-column label="方向" width="75"><template #default="scope">{{ scope.row.direction === 'RECEIPT' ? '收款' : '退款' }}</template></el-table-column><el-table-column label="方式" width="85"><template #default="scope">{{ paymentText(scope.row.method) }}</template></el-table-column><el-table-column label="金额" width="105" align="right"><template #default="scope">¥{{ money(scope.row.amount_cents) }}</template></el-table-column><el-table-column label="操作" width="80"><template #default="scope"><el-button v-if="['RESERVED','CHECKED_IN'].includes(selectedStay.status) && scope.row.refundable_cents > 0" link type="danger" @click="refundPayment(scope.row)">退款</el-button></template></el-table-column></el-table>
+      </template>
+    </el-drawer>
+
+    <el-dialog v-model="chargeDialog" title="添加费用或优惠" width="500px"><el-form label-width="100px"><el-form-item label="类型"><el-select v-model="chargeForm.type" style="width:100%"><el-option label="服务费用" value="SERVICE"></el-option><el-option label="赔偿费用" value="DAMAGE"></el-option><el-option label="优惠减免" value="DISCOUNT"></el-option><el-option label="手工调整" value="ADJUSTMENT"></el-option></el-select></el-form-item><el-form-item label="说明" required><el-input v-model="chargeForm.description"></el-input></el-form-item><el-form-item label="金额" required><el-input-number v-model="chargeForm.amount" :min="0.01" :precision="2"></el-input-number><span class="form-unit">元</span></el-form-item></el-form><template #footer><el-button @click="chargeDialog=false">取消</el-button><el-button type="primary" :loading="saving" @click="submitCharge">保存流水</el-button></template></el-dialog>
+
+    <el-dialog v-model="collectDialog" title="登记收款" width="500px"><el-form label-width="100px"><el-form-item label="金额" required><el-input-number v-model="collectForm.amount" :min="0.01" :precision="2"></el-input-number><span class="form-unit">元</span></el-form-item><el-form-item label="用途"><el-select v-model="collectForm.purpose" style="width:100%"><el-option label="房费" value="ROOM"></el-option><el-option label="押金" value="DEPOSIT"></el-option><el-option label="其他" value="OTHER"></el-option></el-select></el-form-item><el-form-item label="支付方式"><el-select v-model="collectForm.method" style="width:100%"><el-option v-for="item in paymentMethods" :key="item.value" :label="item.label" :value="item.value"></el-option></el-select></el-form-item><el-form-item label="备注"><el-input v-model="collectForm.notes"></el-input></el-form-item></el-form><template #footer><el-button @click="collectDialog=false">取消</el-button><el-button type="primary" :loading="saving" @click="submitCollect">确认收款</el-button></template></el-dialog>
+
+    <el-dialog v-model="reservationDialog" title="新建预订" width="620px" destroy-on-close><el-alert title="预订会锁定所选房间的时间段，重叠订单将被阻止" type="info" :closable="false"></el-alert><el-form label-width="120px" class="dialog-form"><el-form-item label="预订房间" required><el-select v-model="reservationForm.roomId" style="width:100%" @change="syncReservationRate"><el-option v-for="room in reservableRooms" :key="room.id" :label="`${room.room_no} · ${room.room_type_name}`" :value="room.id"></el-option></el-select></el-form-item><el-form-item label="客户" required><el-select v-model="reservationForm.guestId" filterable style="width:100%"><el-option v-for="item in guests" :key="item.id" :label="`${item.name} · ${maskDocument(item.document_no)}`" :value="item.id" :disabled="!!item.blacklisted"></el-option></el-select></el-form-item><el-form-item label="预计到店" required><el-date-picker v-model="reservationForm.expectedCheckin" type="datetime" style="width:100%" format="YYYY-MM-DD HH:mm"></el-date-picker></el-form-item><el-form-item label="预计离店" required><el-date-picker v-model="reservationForm.expectedCheckout" type="datetime" style="width:100%" format="YYYY-MM-DD HH:mm"></el-date-picker></el-form-item><el-form-item label="成交房价"><el-input-number v-model="reservationForm.nightlyRate" :min="0" :precision="2"></el-input-number><span class="form-unit">元/夜</span></el-form-item><el-form-item label="预收定金"><el-input-number v-model="reservationForm.deposit" :min="0" :precision="2"></el-input-number><span class="form-unit">元</span></el-form-item><el-form-item label="支付方式" v-if="reservationForm.deposit > 0"><el-select v-model="reservationForm.paymentMethod" style="width:100%"><el-option v-for="item in paymentMethods" :key="item.value" :label="item.label" :value="item.value"></el-option></el-select></el-form-item><el-form-item label="来源"><el-select v-model="reservationForm.source" style="width:100%"><el-option label="电话" value="PHONE"></el-option><el-option label="到店咨询" value="WALK_IN"></el-option><el-option label="线下平台" value="OFFLINE_PLATFORM"></el-option><el-option label="其他" value="OTHER"></el-option></el-select></el-form-item><el-form-item label="备注"><el-input v-model="reservationForm.notes" type="textarea" :rows="2"></el-input></el-form-item></el-form><template #footer><el-button @click="reservationDialog=false">取消</el-button><el-button type="primary" :loading="saving" @click="submitReservation">确认预订</el-button></template></el-dialog>
+
+    <el-dialog v-model="extendDialog" title="办理续住" width="480px"><el-form label-width="120px"><el-form-item label="新预计离店" required><el-date-picker v-model="extendForm.expectedCheckout" type="datetime" style="width:100%" format="YYYY-MM-DD HH:mm"></el-date-picker></el-form-item></el-form><el-alert title="系统会检查该房间是否与后续预订冲突" type="info" :closable="false"></el-alert><template #footer><el-button @click="extendDialog=false">取消</el-button><el-button type="primary" :loading="saving" @click="submitExtend">确认续住</el-button></template></el-dialog>
+
+    <el-dialog v-model="changeRoomDialog" title="办理换房" width="560px"><el-form label-width="120px"><el-form-item label="目标房间" required><el-select v-model="changeRoomForm.roomId" style="width:100%" @change="syncChangeRoomRate"><el-option v-for="room in changeableRooms" :key="room.id" :label="`${room.room_no} · ${room.room_type_name} · ¥${money(room.standard_price_cents)}`" :value="room.id"></el-option></el-select></el-form-item><el-form-item label="新房成交价"><el-input-number v-model="changeRoomForm.nightlyRate" :min="0" :precision="2"></el-input-number><span class="form-unit">元/夜</span></el-form-item><el-form-item label="同日计费"><el-radio-group v-model="changeRoomForm.sameDayRateMode"><el-radio value="NEW">按新房价格</el-radio><el-radio value="OLD">按原房价格</el-radio></el-radio-group></el-form-item><el-form-item label="换房原因" required><el-input v-model="changeRoomForm.reason" type="textarea" :rows="2"></el-input></el-form-item></el-form><el-alert title="换房后原房自动转为待清洁，新房转为入住中" type="warning" :closable="false"></el-alert><template #footer><el-button @click="changeRoomDialog=false">取消</el-button><el-button type="primary" :loading="saving" @click="submitChangeRoom">确认换房</el-button></template></el-dialog>
+
+    <el-dialog v-model="addGuestDialog" title="添加同住人" width="500px"><el-form label-width="100px"><el-form-item label="选择客户" required><el-select v-model="addGuestForm.guestId" filterable style="width:100%"><el-option v-for="guest in availableStayGuests" :key="guest.id" :label="`${guest.name} · ${maskDocument(guest.document_no)}`" :value="guest.id" :disabled="!!guest.blacklisted"></el-option></el-select></el-form-item></el-form><el-alert title="登记人数不能超过房型最大入住人数" type="info" :closable="false"></el-alert><template #footer><el-button @click="addGuestDialog=false">取消</el-button><el-button type="primary" :loading="saving" @click="submitAddGuest">确认添加</el-button></template></el-dialog>
+
+    <el-dialog v-model="profileDialog" title="修改账号名称" width="460px"><el-form label-width="100px"><el-form-item label="登录账号"><el-input :model-value="auth.user?.username" disabled></el-input></el-form-item><el-form-item label="显示名称" required><el-input v-model="profileForm.displayName" maxlength="30"></el-input></el-form-item></el-form><template #footer><el-button @click="profileDialog=false">取消</el-button><el-button type="primary" :loading="saving" @click="submitProfile">保存</el-button></template></el-dialog>
+
+    <el-dialog v-model="passwordDialog" title="修改登录密码" width="480px"><el-form label-width="110px"><el-form-item label="当前密码" required><el-input v-model="passwordForm.currentPassword" type="password" show-password></el-input></el-form-item><el-form-item label="新密码" required><el-input v-model="passwordForm.newPassword" type="password" show-password placeholder="至少8位，包含字母和数字"></el-input></el-form-item><el-form-item label="确认新密码" required><el-input v-model="passwordForm.confirmPassword" type="password" show-password></el-input></el-form-item></el-form><template #footer><el-button @click="passwordDialog=false">取消</el-button><el-button type="primary" :loading="saving" @click="submitChangePassword">确认修改</el-button></template></el-dialog>
+
+    <el-dialog v-model="checkoutDialog" title="退房结算" width="560px" :close-on-click-modal="false"><template v-if="checkoutBill"><el-descriptions :column="2" border><el-descriptions-item label="房号">{{ checkoutBill.roomNo }}</el-descriptions-item><el-descriptions-item label="计费夜数">{{ checkoutBill.nights }} 夜</el-descriptions-item><el-descriptions-item label="费用合计">¥{{ money(checkoutBill.chargeTotalCents) }}</el-descriptions-item><el-descriptions-item label="净收款">¥{{ money(checkoutBill.netPaidCents) }}</el-descriptions-item></el-descriptions><div class="settlement-box" :class="checkoutBill.balanceCents > 0 ? 'collect' : 'refund'"><span>{{ checkoutBill.balanceCents > 0 ? '还需收款' : checkoutBill.balanceCents < 0 ? '需要退款' : '账目已结清' }}</span><strong>¥{{ money(Math.abs(checkoutBill.balanceCents)) }}</strong></div><el-form label-width="100px" v-if="checkoutBill.balanceCents !== 0"><el-form-item label="结算方式"><el-select v-model="checkoutForm.method" style="width:100%"><el-option v-for="item in paymentMethods" :key="item.value" :label="item.label" :value="item.value"></el-option></el-select></el-form-item></el-form><el-alert title="退房完成后房间将变为“待清洁”，确认清洁后才可再次入住。" type="warning" :closable="false"></el-alert></template><template #footer><el-button @click="checkoutDialog=false">取消</el-button><el-button type="danger" :loading="saving" @click="submitCheckout">确认结算并退房</el-button></template></el-dialog>
+  </div>
+
+  <script src="./node_modules/vue/dist/vue.global.prod.js"></script>
+  <script src="./node_modules/element-plus/dist/index.full.min.js"></script>
+  <script src="./node_modules/element-plus/dist/locale/zh-cn.min.js"></script>
+  <script src="./src/renderer/app.js"></script>
+</body>
+</html>
